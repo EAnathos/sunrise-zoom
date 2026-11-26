@@ -1,0 +1,8 @@
+[package]
+name = "mod-sunrise_zoom"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# `cargo sunrise-mod check` fetches the API crate into the ignored .sunrise/ directory.
+sunrise-mod-api = { path = ".sunrise/sdk/api/crates/sunrise-mod-api" }

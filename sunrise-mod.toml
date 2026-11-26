@@ -1,0 +1,11 @@
+id = "sunrise_zoom"
+name = "Sunrise Zoom"
+version = "0.1.0"
+description = "A smooth, configurable client-side zoom with animated transitions."
+authors = ["EAnathos"]
+license = "PolyForm-Noncommercial-1.0.0"
+side = "client"
+
+[native]
+game = "26.3"
+sunrise = "94256510f74e6843754e0a93fd9e4da7e45b1056"
