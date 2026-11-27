@@ -41,11 +41,11 @@ The default mode changes FOV during vanilla spyglass use; the optional key mode 
 ### Runtime flow
 
 1. Sunrise reports whether the local player is using a spyglass through `ComputeFovModifierEvent.player.using`; its registered key mapping supplies the optional hold input.
-2. The client selects the activation from the chosen mode and updates a reversible time-based transition toward the configured zoom ratio.
-3. Sunrise's `compute_fov` callback applies the current transition ratio on rendered frames. In spyglass mode it compensates for the built-in spyglass zoom; in key mode it applies a normal-view ratio. Hand/HUD FOV remains on its existing path.
+2. The client selects the activation from the chosen mode and animates one effective FOV factor: `1 / magnification` while zoomed, `1` otherwise.
+3. Sunrise's `compute_fov` callback first removes the vanilla spyglass's 0.1 factor when scoped, then applies the animated factor on each rendered frame. This keeps the transition continuous as scoping starts and ends. Hand/HUD FOV remains on its existing path.
 4. Outside the selected activation, FOV is unchanged.
 
-The vanilla spyglass narrows the field of view to roughly one tenth. The implementation compensates for that built-in factor to produce the configured *effective* magnification. This assumption and the FOV behavior need an in-game check on the pinned Sunrise build.
+The vanilla spyglass narrows the field of view to roughly one tenth. The implementation normalizes that scoped value before applying the configured *effective* magnification. The output is clamped to Sunrise's accepted 1°–179° range, so extreme magnification may be limited at unusually narrow base FOVs. This assumption and the FOV behavior need an in-game check on the pinned Sunrise build.
 
 ### Repository layout
 
@@ -86,7 +86,7 @@ cargo test
 2. Confirm configured magnification replaces, rather than stacks with, vanilla spyglass zoom.
 3. Select separate key mode, rebind the key, and confirm it zooms while held without a spyglass.
 4. While in separate key mode, use the spyglass and confirm vanilla spyglass zoom remains unchanged and does not stack with the key zoom.
-5. Release the active control during a transition; the view should reverse without a jump.
+5. Release the spyglass or key during a transition; the view should reverse smoothly without a jump and reach the normal view after the configured duration.
 6. Set transition duration to zero and confirm the view changes instantly.
 7. Check the vanilla spyglass overlay, arm pose, hand/item FOV, and non-zoomed world FOV.
 8. Disconnect or change worlds while zoomed; normal FOV must be restored.

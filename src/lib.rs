@@ -19,14 +19,19 @@ const MODE_KEY: u32 = 1;
 const DEFAULT_MAGNIFICATION: f64 = 4.0;
 const DEFAULT_TRANSITION_SECONDS: f64 = 0.18;
 
-/// Vanilla's spyglass narrows FOV by 0.1 before the `compute_fov` hook.
-/// Multiplying by 10 / desired magnification replaces that zoom factor.
-const VANILLA_SPYGLASS_MAGNIFICATION: f32 = 10.0;
+/// Vanilla narrows FOV to one tenth while scoping. `compute_fov` runs after that step.
+const VANILLA_SPYGLASS_FOV_FACTOR: f32 = 0.1;
 
-static TRANSITION: OnceLock<Mutex<animation::Transition>> = OnceLock::new();
+#[derive(Default)]
+struct ZoomState {
+    transition: animation::Transition,
+    using_spyglass: bool,
+}
 
-fn transition() -> &'static Mutex<animation::Transition> {
-    TRANSITION.get_or_init(|| Mutex::new(animation::Transition::default()))
+static ZOOM_STATE: OnceLock<Mutex<ZoomState>> = OnceLock::new();
+
+fn zoom_state() -> &'static Mutex<ZoomState> {
+    ZOOM_STATE.get_or_init(|| Mutex::new(ZoomState::default()))
 }
 
 #[derive(Default)]
@@ -88,28 +93,40 @@ impl Hooks for SunriseZoom {
             .setting_f64(TRANSITION_SECONDS)
             .unwrap_or(DEFAULT_TRANSITION_SECONDS)
             .clamp(0.0, 0.6);
-        let target_ratio = match (mode, using_spyglass, zoom_key_down) {
-            (MODE_SPYGLASS, true, _) => VANILLA_SPYGLASS_MAGNIFICATION / magnification,
+        let target_fov_factor = match (mode, using_spyglass, zoom_key_down) {
+            (MODE_SPYGLASS, true, _) => 1.0 / magnification,
+            // In key mode, retain vanilla spyglass zoom and avoid stacking both zooms.
+            (MODE_KEY, true, _) => VANILLA_SPYGLASS_FOV_FACTOR,
             (MODE_KEY, false, true) => 1.0 / magnification,
-            // In key mode, keep the game's spyglass behavior intact and avoid stacking both zooms.
             _ => 1.0,
         };
 
-        if let Ok(mut transition) = transition().lock() {
-            transition.retarget(target_ratio, Duration::from_secs_f64(seconds), Instant::now());
+        if let Ok(mut state) = zoom_state().lock() {
+            state.using_spyglass = using_spyglass;
+            state.transition.retarget(
+                target_fov_factor,
+                Duration::from_secs_f64(seconds),
+                Instant::now(),
+            );
         }
     }
 
-    /// Apply the current render-time ratio: compensate for vanilla's spyglass zoom in spyglass
-    /// mode, or narrow the ordinary FOV in separate-key mode.
+    /// Normalize the vanilla spyglass FOV before applying the shared animated factor. This keeps
+    /// the effective zoom continuous when the incoming FOV switches to/from the scoped value.
     fn compute_fov(&self, _host: &dyn ClientHost, event: &mut ComputeFovEvent) {
-        let Ok(transition) = transition().lock() else {
+        let Ok(state) = zoom_state().lock() else {
             return;
         };
-        let ratio = transition.sample(Instant::now());
-        let degrees = event.degrees * ratio;
-        if degrees.is_finite() && (1.0..=179.0).contains(&degrees) {
-            event.degrees = degrees;
+        let normal_fov = if state.using_spyglass {
+            event.degrees / VANILLA_SPYGLASS_FOV_FACTOR
+        } else {
+            event.degrees
+        };
+        let degrees = normal_fov * state.transition.sample(Instant::now());
+        if degrees.is_finite() {
+            // Sunrise ignores out-of-range values. Clamp rather than falling back abruptly to
+            // vanilla when a high magnification would cross the 1-degree floor.
+            event.degrees = degrees.clamp(1.0, 179.0);
         }
     }
 }

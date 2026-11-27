@@ -24,14 +24,16 @@ The API hook catalog is available through `cargo sunrise-mod hooks <term> --all`
 
 ## FOV replacement calculation
 
-Vanilla applies a spyglass FOV factor of approximately `0.1`, equivalent to about 10× magnification. `compute_fov` therefore receives an already narrowed FOV while scoping. To produce an effective magnification `m`, the spyglass mode scales that value by `10 / m`. Separate key mode applies `1 / m` to the ordinary FOV:
+Vanilla applies a spyglass FOV factor of approximately `0.1`, equivalent to about 10× magnification. `compute_fov` therefore receives an already narrowed FOV while scoping. The hook first divides by `0.1` to recover the ordinary FOV, then applies one shared animated factor for either activation mode:
 
 ```text
-spyglass_mode_fov = vanilla_scoped_fov × (10 / configured_magnification)
-key_mode_fov      = normal_fov × (1 / configured_magnification)
+normal_fov      = vanilla_scoped_fov / 0.1  # only while the spyglass is active
+zoomed_fov      = normal_fov × animated_factor
+animated_factor = 1 / configured_magnification, while zoomed
+animated_factor = 1, otherwise
 ```
 
-For example, a 4× setting scales vanilla's 10× view by 2.5, yielding the requested 4× effective view. The exact vanilla factor, unrelated camera effects, view overlays, and upper/lower setting limits must be checked in game on the pinned build. Key mode leaves normal spyglass use at the vanilla magnification and suspends its own key zoom while scoping.
+Using one shared factor keeps the release transition continuous: the incoming raw FOV changes from scoped to normal as the item is released, but the normalized FOV and animation state remain in the same coordinate system. In key mode, using the spyglass targets vanilla's `0.1` factor, so the two zooms do not stack. Output is clamped to Sunrise's accepted 1–179 degree range to avoid a rejected callback and abrupt fallback at high magnification. The exact vanilla factor, unrelated camera effects, and practical magnification limits still need an in-game check on the pinned build.
 
 The transition stores the current ratio and target ratio. If the target changes during an animation, it starts from the value currently shown, avoiding a jump. The controller is sampled from `compute_fov` so frame rendering is not limited to the client tick rate.
 
