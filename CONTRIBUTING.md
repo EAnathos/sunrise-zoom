@@ -25,16 +25,14 @@ The README describes the player-facing features. See [the development guide](doc
 
 ## Branch workflow
 
-- `main` contains reviewed releases.
-- `dev` is the shared integration branch.
-- Create short-lived topic branches from the latest `dev`, then open a pull request back to `dev`.
+- `main` is the only long-lived branch and contains reviewed changes and releases.
+- Create short-lived topic branches from the latest `main`, then open a pull request back to `main`.
 - Use descriptive prefixes: `feature/`, `fix/`, `docs/`, `refactor/`, `test/`, or `chore/`.
 - Examples: `feature/zoom-animation`, `fix/fov-reset-on-disconnect`, `docs/client-settings`, `chore/release-workflow`.
-- Promote reviewed changes from `dev` to `main` with a pull request when the release is ready.
-- Do not commit directly to `main` or `dev`, force-push shared branches, or delete shared branches.
+- Do not commit directly to `main`, force-push shared branches, or delete shared branches.
 - Keep pull requests focused. Update the README when player-facing behavior changes and `docs/architecture.md` when technical decisions change.
 
-Repository branch protection should require a pull request and one approval for `main` and `dev`, dismiss stale reviews, require resolved conversations, and disallow force pushes and deletion. An administrator bypass may be used only for repository maintenance or release tooling that requires a direct release push; routine development still follows pull requests.
+Protect `main` by requiring a pull request and one approval, dismissing stale reviews, requiring resolved conversations, and disallowing force pushes and deletion. An administrator bypass may be used only for repository maintenance or release tooling that requires a direct release push; routine development still follows pull requests.
 
 ## Commit messages
 
@@ -70,7 +68,7 @@ Explain the user-visible change, implementation approach, and any API assumption
 
 ## Release process
 
-Releases are prepared from a clean `main` checkout using the Sunrise release tooling once the project is functional and registry-ready. Verify version, changelog, icon, metadata, target game compatibility, and in-game behavior before making a release. Do not hand-edit generated release assets or signing data.
+Releases are prepared from a clean `main` checkout using the Sunrise release tooling once the project is functional and registry-ready. Verify version, changelog, icon, metadata, target game compatibility, and in-game behavior before making a release. The initial release is `0.1.0`; wait for the outstanding issues and in-game checks to be resolved before declaring `1.0.0`. Do not hand-edit generated release assets or signing data.
 
 ## License
 

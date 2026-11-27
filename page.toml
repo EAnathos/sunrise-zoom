@@ -1,3 +1,11 @@
 summary = "Replace spyglass zoom or add an optional animated zoom key."
 description = "Sunrise Zoom lets you choose between replacing the vanilla spyglass magnification and adding a separate, rebindable hold-to-zoom key. Both modes have configurable magnification and smooth transitions. It is client-side only and needs no server installation."
 categories = ["utility"]
+
+[[screenshots]]
+path = "page/gallery/zoom-in-game.jpg"
+caption = "Using Sunrise Zoom in a world"
+
+[[screenshots]]
+path = "page/gallery/zoom-settings.jpg"
+caption = "Adjusting zoom mode and magnification"
