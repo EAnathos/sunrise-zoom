@@ -1,5 +1,3 @@
-# Before releasing, write a summary of at least 25 characters and a description
-# of at least 125 characters. Add at least one [[screenshots]] entry.
-summary = "A smooth, configurable client-side zoom for Sunrise."
-description = "Sunrise Zoom adds a rebindable zoom control with adjustable magnification and smooth animated transitions. The project is in development; see the repository README for planned features and current status."
+summary = "A smooth, configurable replacement for the vanilla spyglass zoom."
+description = "Sunrise Zoom changes the magnification of the vanilla spyglass and animates the view as you start or stop using it. It is client-side only, with local magnification and transition settings. Server installation is not required."
 categories = ["utility"]

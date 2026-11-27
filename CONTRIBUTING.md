@@ -1,13 +1,13 @@
 # Contributing to Sunrise Zoom
 
-Thanks for helping build Sunrise Zoom. The project aims to provide a dependable client-side zoom with smooth, configurable transitions and careful handling of Sunrise's camera lifecycle.
+Thanks for helping build Sunrise Zoom. The project replaces the vanilla spyglass magnification with a configurable, animated client-side view.
 
 ## Before opening an issue
 
 - Search existing issues and pull requests for the same report or proposal.
 - Use the issue forms for bugs and feature requests.
 - For feature work beyond a small fix, describe the user problem and proposed behavior before implementation.
-- Keep the first release focused on zoom input, animation, settings, and reliable FOV restoration. Discuss optional camera effects separately.
+- Keep the first release focused on spyglass magnification, transition animation, settings, and reliable FOV restoration. Do not add free zoom or a separate zoom key without first changing the product scope.
 
 For bug reports, include Sunrise build, mod version or commit, client/server context, reproduction steps, and relevant logs. Do not attach full worlds or private files.
 
@@ -56,11 +56,11 @@ Write subjects in English, use one logical change per commit, and omit the trail
 
 ## Architecture guidelines
 
-- Keep the zoom controller independent from Sunrise hooks. The controller accepts current state, target state, and elapsed time, then returns a normalized zoom value.
-- Keep Sunrise-specific code at the edges: input registration/reading, config integration, lifecycle callbacks, and FOV application.
-- Store only user preferences in client config. Animation progress and key-down state are transient runtime state.
+- Keep the transition controller independent from Sunrise hooks. It accepts current/target ratios and elapsed time, then returns the ratio to apply.
+- Keep Sunrise-specific code at the edges: spyglass-use detection, settings registration/reads, and FOV application.
+- Store only user preferences in Sunrise's client settings. Animation progress and detected spyglass use are transient runtime state.
 - Validate config values at load time and clamp magnification/durations to documented safe ranges.
-- Treat focus loss, screens, disconnects, world changes, and unload as explicit reset paths.
+- Treat spyglass release/reuse, disconnects, world changes, and unload as explicit transition/reset paths.
 - Use only supported public Sunrise mod APIs. Record API limitations in `docs/architecture.md` and adjust requirements when necessary.
 - Avoid server hooks, networking, and mandatory dependencies unless a concrete feature requires them.
 

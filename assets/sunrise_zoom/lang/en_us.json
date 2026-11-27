@@ -1,0 +1,6 @@
+{
+  "sunrise_zoom.settings.magnification": "Spyglass magnification",
+  "sunrise_zoom.settings.magnification.tooltip": "Effective zoom while using a spyglass.",
+  "sunrise_zoom.settings.transition_seconds": "Transition duration",
+  "sunrise_zoom.settings.transition_seconds.tooltip": "Seconds to animate into and out of spyglass zoom. Set to zero for an instant transition."
+}

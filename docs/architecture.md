@@ -1,36 +1,52 @@
 # Architecture notes
 
-This document records implementation decisions and findings from the Sunrise API feasibility work. The current state is intentionally provisional until verified in a running client.
+## Decisions
 
-## Current decisions
+- Mod side: client only. The server does not install, configure, or enforce the local zoom behavior.
+- Activation: use the vanilla spyglass action. No separate free-zoom key or unrestricted mode.
+- Magnification: modify the rendered world FOV only while `FovPlayer.using` is `UseItem::Spyglass`.
+- Settings: Sunrise's owner-bound client settings, shown on the mod's own Options > Mods page.
+- Animation: a small reversible transition controller sampled from the render-time FOV hook.
+- Dependencies: pinned Sunrise mod API only.
 
-- Mod side: client only; zoom is a local camera preference and should not require server installation.
-- Target behavior: interpolate the effective FOV from its live unzoomed value toward a configurable magnification.
-- Core state: a reversible time-based transition, separate from the Sunrise event adapter.
-- Settings: client-local config; no server config or synchronization.
-- Dependency policy: use the pinned Sunrise mod API only unless an issue justifies another dependency.
+## Verified SDK behavior
 
-## API feasibility checklist
+For the pinned build in `sunrise-mod.toml`:
 
-- [ ] Confirm the supported FOV/zoom callback and how to transform its value.
-- [ ] Confirm whether the held hand/item uses a separate FOV path.
-- [ ] Confirm key mapping registration and press/release state delivery.
-- [ ] Confirm safe mouse-wheel handling without consuming GUI or inventory scroll.
-- [ ] Confirm client configuration read/write and default migration behavior.
-- [ ] Confirm reset hooks for lost focus, pause screens, disconnect, world change, and unload.
-- [ ] Build and run a minimal prototype on the pinned Sunrise build.
+- `ComputeFovModifierEvent.player.using` exposes whether the local player is using a spyglass.
+- `compute_fov_modifier` runs once per client tick before the zoom stage; use it to retarget the transition without changing vanilla gameplay input.
+- `compute_fov` receives world FOV after normal calculation and the zoom stage, before projection/Nausea. It also runs for near-plane overlays. Hand/HUD FOV uses another path.
+- The `zoom` hook cannot replace the scope behavior: Sunrise documents that the spyglass's own view wins over a native mod's requested `Zoom`.
+- Settings can be registered with `Registrar::register_setting` and read through the client host's typed `setting_f64` method.
 
-The SDK checkout available during repository setup contains key-mapping registration support and zoom/FOV hook symbols. The exact public event shapes and lifecycle guarantees still need to be verified when implementing against the new repository's pinned SDK.
+The API hook catalog is available through `cargo sunrise-mod hooks <term> --all`.
 
-## Planned component boundaries
+## FOV replacement calculation
 
-| Component | Responsibility |
+Vanilla applies a spyglass FOV factor of approximately `0.1`, equivalent to about 10× magnification. `compute_fov` therefore receives an already narrowed FOV while scoping. To produce an effective magnification `m`, the mod scales that value by `10 / m`:
+
+```text
+scoped_fov = vanilla_scoped_fov × (10 / configured_magnification)
+```
+
+For example, a 4× setting scales vanilla's 10× view by 2.5, yielding the requested 4× effective view. The exact vanilla factor, unrelated camera effects, view overlays, and upper/lower setting limits must be checked in game on the pinned build.
+
+The transition stores the current ratio and target ratio. If the target changes during an animation, it starts from the value currently shown, avoiding a jump. The controller is sampled from `compute_fov` so frame rendering is not limited to the client tick rate.
+
+## Component boundaries
+
+| File | Responsibility |
 | --- | --- |
-| `config` | Defaults, validation, persisted client preferences, config migration. |
-| `input` | Key mapping state, hold/toggle semantics, optional scroll adjustment. |
-| `zoom` | Desired state, current progress, target magnification, reversals. |
-| `animation` | Easing functions and duration-based interpolation. |
-| `camera` | Sunrise FOV callback adapter and restoration behavior. |
-| `lib` | Mod entry point, hook wiring, lifecycle reset dispatch. |
+| `src/lib.rs` | Hook registration, settings, spyglass-use detection, FOV adapter. |
+| `src/animation.rs` | Reversible time-based transition and easing. |
+| `assets/sunrise_zoom/lang/en_us.json` | Settings labels and tooltips. |
 
-Keep components small and create files when their responsibility has actual code. Avoid speculative abstraction layers and private game internals.
+Keep the animation controller independent from Sunrise events. Avoid private game internals, server hooks, networking, and a second zoom input for this feature.
+
+## Known checks before release
+
+- Confirm the pinned build's actual vanilla spyglass FOV factor is 0.1.
+- Verify configured magnification over several normal FOV settings and with FOV-altering effects.
+- Verify `compute_fov` output remains within Sunrise's accepted finite 1–179 degree range.
+- Verify fast transitions, release/re-scope reversals, player/world changes, hand rendering, overlays, and non-spyglass views.
+- Verify client-only installation on a multiplayer server and document server rule responsibility.
