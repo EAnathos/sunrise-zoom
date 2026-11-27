@@ -42,6 +42,10 @@ The transition stores the current ratio and target ratio. If the target changes 
 
 Keep the animation controller independent from Sunrise events. Avoid private game internals, server hooks, networking, and a second zoom input for this feature.
 
+## Mouse turning
+
+Sunrise's `calculate_player_turn` hook exposes one `mouse_sensitivity` value for the whole mouse turn, not separate horizontal and vertical values. The `zoom` turn scale likewise affects both axes. With the current public API, a zoom-only vertical sensitivity adjustment cannot be implemented without also changing horizontal sensitivity or bypassing normal player rotation handling. Do not compensate by writing pitch independently: that would separate the rendered view from the player's normal mouse input and synchronization.
+
 ## Known checks before release
 
 - Confirm the pinned build's actual vanilla spyglass FOV factor is 0.1.

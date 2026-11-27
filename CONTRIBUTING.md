@@ -21,7 +21,7 @@ cargo sunrise-mod build
 cargo test
 ```
 
-The README contains the product requirements and manual in-game verification checklist. If a change affects camera behavior, list the specific manual checks performed in the pull request.
+The README describes the player-facing features. See [the development guide](docs/development.md) for the manual in-game verification checklist and [the architecture notes](docs/architecture.md) for implementation decisions. If a change affects camera behavior, list the specific manual checks performed in the pull request.
 
 ## Branch workflow
 
@@ -32,7 +32,7 @@ The README contains the product requirements and manual in-game verification che
 - Examples: `feature/zoom-animation`, `fix/fov-reset-on-disconnect`, `docs/client-settings`, `chore/release-workflow`.
 - Promote reviewed changes from `dev` to `main` with a pull request when the release is ready.
 - Do not commit directly to `main` or `dev`, force-push shared branches, or delete shared branches.
-- Keep pull requests focused. Update README requirements and `docs/architecture.md` when behavior or technical decisions change.
+- Keep pull requests focused. Update the README when player-facing behavior changes and `docs/architecture.md` when technical decisions change.
 
 Repository branch protection should require a pull request and one approval for `main` and `dev`, dismiss stale reviews, require resolved conversations, and disallow force pushes and deletion. An administrator bypass may be used only for repository maintenance or release tooling that requires a direct release push; routine development still follows pull requests.
 
