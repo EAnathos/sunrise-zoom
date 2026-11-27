@@ -1,7 +1,7 @@
 //! Sunrise Zoom replaces the vanilla spyglass magnification and animates the FOV transition.
 use mod_api::{
     self, ClientHost, ComputeFovEvent, ComputeFovModifierEvent, Hooks, RegistrationContext,
-    Registrar, SettingSpec,
+    Registrar, SettingSpec, Zoom,
 };
 use mod_api::client::camera::UseItem;
 use mod_api::KeyRegistration;
@@ -167,5 +167,30 @@ impl Hooks for SunriseZoom {
         } else {
             state.last_unscoped_fov = Some(incoming_degrees);
         }
+    }
+
+    /// Scale both camera axes with the same animated factor as the key zoom. Sunrise applies
+    /// this turn scale to player look input without changing the user's mouse sensitivity.
+    fn zoom(&self, host: &dyn ClientHost, _event: &mut mod_api::ZoomEvent) -> Option<Zoom> {
+        if host.setting_choice(MODE).unwrap_or(MODE_SPYGLASS) != MODE_KEY {
+            return None;
+        }
+        let Ok(state) = zoom_state().lock() else {
+            return None;
+        };
+        if state.using_spyglass {
+            return None;
+        }
+        let factor = state.transition.sample(Instant::now());
+        if factor >= 1.0 {
+            return None;
+        }
+
+        Some(Zoom {
+            // FOV is already handled by compute_fov; this leaves the zoom hook's FOV unchanged.
+            factor: 1.0,
+            smooth: true,
+            turn: factor,
+        })
     }
 }

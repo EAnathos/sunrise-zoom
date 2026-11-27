@@ -5,7 +5,7 @@ Sunrise Zoom adds smooth, adjustable zoom to Sunrise. Choose the way you want to
 - **Spyglass:** replace the spyglass's usual magnification while keeping its normal controls and overlay.
 - **Hold a key:** zoom without a spyglass using a rebindable key (default: `C`).
 
-Both modes use the magnification and transition duration selected in **Options → Mods → Sunrise Zoom**. The zoom eases in while active and eases back out when released.
+Both modes use the magnification and transition duration selected in **Options → Mods → Sunrise Zoom**. The zoom eases in while active and eases back out when released. In key mode, looking around also slows in step with the zoom and returns smoothly to normal when you release the key.
 
 ## Multiplayer
 

@@ -44,7 +44,7 @@ Keep the animation controller independent from Sunrise events. Avoid private gam
 
 ## Mouse turning
 
-Sunrise's `calculate_player_turn` hook exposes one `mouse_sensitivity` value for the whole mouse turn, not separate horizontal and vertical values. The `zoom` turn scale likewise affects both axes. With the current public API, a zoom-only vertical sensitivity adjustment cannot be implemented without also changing horizontal sensitivity or bypassing normal player rotation handling. Do not compensate by writing pitch independently: that would separate the rendered view from the player's normal mouse input and synchronization.
+Sunrise's `zoom` hook accepts one turn scale for both look axes. In key mode, return a zoom with FOV factor `1` and use the current animated zoom factor as its turn scale. This slows horizontal and vertical looking in proportion to magnification, eases the slowdown in and out, and leaves the user's sensitivity setting unchanged. The hook is inactive in spyglass mode and while the spyglass is in use, so its native turning behavior remains in charge there.
 
 ## Known checks before release
 
