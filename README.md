@@ -42,10 +42,10 @@ The default mode changes FOV during vanilla spyglass use; the optional key mode 
 
 1. Sunrise reports whether the local player is using a spyglass through `ComputeFovModifierEvent.player.using`; its registered key mapping supplies the optional hold input.
 2. The client selects the activation from the chosen mode and animates one effective FOV factor: `1 / magnification` while zoomed, `1` otherwise.
-3. Sunrise's `compute_fov` callback first removes the vanilla spyglass's 0.1 factor when scoped, then applies the animated factor on each rendered frame. This keeps the transition continuous as scoping starts and ends. Hand/HUD FOV remains on its existing path.
+3. Sunrise eases its camera FOV modifier toward the spyglass value over several ticks. In replacement mode, the mod applies its animated factor to the last ordinary rendered FOV during scope entry and exit, avoiding a temporary spike while Sunrise's own FOV is still easing. Key mode leaves the vanilla spyglass FOV unchanged. Hand/HUD FOV remains on its existing path.
 4. Outside the selected activation, FOV is unchanged.
 
-The vanilla spyglass narrows the field of view to roughly one tenth. The implementation normalizes that scoped value before applying the configured *effective* magnification. The output is clamped to Sunrise's accepted 1°–179° range, so extreme magnification may be limited at unusually narrow base FOVs. This assumption and the FOV behavior need an in-game check on the pinned Sunrise build.
+The vanilla spyglass narrows the field of view to roughly one tenth. Sunrise eases that camera modifier over several ticks; replacement mode therefore anchors its transition to the last ordinary rendered FOV instead of dividing the incoming value by a fixed factor. The output is clamped to Sunrise's accepted 1°–179° range, so extreme magnification may be limited at unusually narrow base FOVs.
 
 ### Repository layout
 

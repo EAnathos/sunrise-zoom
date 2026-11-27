@@ -24,16 +24,11 @@ The API hook catalog is available through `cargo sunrise-mod hooks <term> --all`
 
 ## FOV replacement calculation
 
-Vanilla applies a spyglass FOV factor of approximately `0.1`, equivalent to about 10× magnification. `compute_fov` therefore receives an already narrowed FOV while scoping. The hook first divides by `0.1` to recover the ordinary FOV, then applies one shared animated factor for either activation mode:
+Vanilla applies a spyglass FOV factor of approximately `0.1`, equivalent to about 10× magnification. Sunrise eases its camera FOV modifier toward that value over several ticks, so the incoming FOV is not immediately the fully scoped value. Dividing the first scoped frames by `0.1` causes a large temporary FOV spike.
 
-```text
-normal_fov      = vanilla_scoped_fov / 0.1  # only while the spyglass is active
-zoomed_fov      = normal_fov × animated_factor
-animated_factor = 1 / configured_magnification, while zoomed
-animated_factor = 1, otherwise
-```
+In spyglass replacement mode, the mod stores the latest ordinary rendered FOV before scoping starts. While entering or leaving scope, it applies the animated factor to that stable baseline rather than trying to reconstruct it from Sunrise's still-easing scoped FOV. This keeps the configured transition duration in control of the visible zoom and avoids the distorted first frames. If the player starts scoping before any ordinary FOV callback has run, the first scoped callback becomes the fallback baseline. Key mode leaves the native spyglass FOV path untouched, so zooms do not stack.
 
-Using one shared factor keeps the release transition continuous: the incoming raw FOV changes from scoped to normal as the item is released, but the normalized FOV and animation state remain in the same coordinate system. In key mode, using the spyglass targets vanilla's `0.1` factor, so the two zooms do not stack. Output is clamped to Sunrise's accepted 1–179 degree range to avoid a rejected callback and abrupt fallback at high magnification. The exact vanilla factor, unrelated camera effects, and practical magnification limits still need an in-game check on the pinned build.
+Output is clamped to Sunrise's accepted 1–179 degree range to avoid a rejected callback and abrupt fallback at high magnification. Unrelated camera effects and practical magnification limits still need an in-game check on the pinned build.
 
 The transition stores the current ratio and target ratio. If the target changes during an animation, it starts from the value currently shown, avoiding a jump. The controller is sampled from `compute_fov` so frame rendering is not limited to the client tick rate.
 

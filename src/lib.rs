@@ -19,13 +19,13 @@ const MODE_KEY: u32 = 1;
 const DEFAULT_MAGNIFICATION: f64 = 4.0;
 const DEFAULT_TRANSITION_SECONDS: f64 = 0.18;
 
-/// Vanilla narrows FOV to one tenth while scoping. `compute_fov` runs after that step.
-const VANILLA_SPYGLASS_FOV_FACTOR: f32 = 0.1;
-
 #[derive(Default)]
 struct ZoomState {
     transition: animation::Transition,
     using_spyglass: bool,
+    replacing_spyglass: bool,
+    last_unscoped_fov: Option<f32>,
+    spyglass_baseline_fov: Option<f32>,
 }
 
 static ZOOM_STATE: OnceLock<Mutex<ZoomState>> = OnceLock::new();
@@ -96,12 +96,20 @@ impl Hooks for SunriseZoom {
         let target_fov_factor = match (mode, using_spyglass, zoom_key_down) {
             (MODE_SPYGLASS, true, _) => 1.0 / magnification,
             // In key mode, retain vanilla spyglass zoom and avoid stacking both zooms.
-            (MODE_KEY, true, _) => VANILLA_SPYGLASS_FOV_FACTOR,
+            (MODE_KEY, true, _) => 1.0,
             (MODE_KEY, false, true) => 1.0 / magnification,
             _ => 1.0,
         };
 
         if let Ok(mut state) = zoom_state().lock() {
+            let replacing_spyglass = mode == MODE_SPYGLASS && using_spyglass;
+            if replacing_spyglass && !state.replacing_spyglass {
+                // Sunrise's camera FOV eases toward the vanilla spyglass modifier over several
+                // ticks. Keep the ordinary rendered FOV as an anchor instead of dividing the
+                // first scoped frames by 0.1 before that easing has reached its target.
+                state.spyglass_baseline_fov = state.last_unscoped_fov;
+            }
+            state.replacing_spyglass = replacing_spyglass;
             state.using_spyglass = using_spyglass;
             state.transition.retarget(
                 target_fov_factor,
@@ -111,22 +119,45 @@ impl Hooks for SunriseZoom {
         }
     }
 
-    /// Normalize the vanilla spyglass FOV before applying the shared animated factor. This keeps
-    /// the effective zoom continuous when the incoming FOV switches to/from the scoped value.
+    /// Apply spyglass replacement from the last ordinary rendered FOV. Sunrise eases its own
+    /// vanilla spyglass modifier over several ticks, so the incoming degrees cannot safely be
+    /// divided by 0.1 on the first scoped frame.
     fn compute_fov(&self, _host: &dyn ClientHost, event: &mut ComputeFovEvent) {
-        let Ok(state) = zoom_state().lock() else {
+        let Ok(mut state) = zoom_state().lock() else {
             return;
         };
-        let normal_fov = if state.using_spyglass {
-            event.degrees / VANILLA_SPYGLASS_FOV_FACTOR
+        let incoming_degrees = event.degrees;
+        let factor = state.transition.sample(Instant::now());
+        // Key mode leaves the native spyglass path entirely to Sunrise. Applying its key
+        // transition while scoped would stack a second zoom on the vanilla scope.
+        if state.using_spyglass && !state.replacing_spyglass {
+            return;
+        }
+        if state.replacing_spyglass && state.spyglass_baseline_fov.is_none() {
+            // This only occurs if the player starts using a spyglass before the first ordinary
+            // world FOV callback (for example, immediately after loading into a world).
+            state.spyglass_baseline_fov = Some(event.degrees);
+        }
+        let replacing_or_releasing = state.spyglass_baseline_fov.is_some()
+            && (state.replacing_spyglass || (factor - 1.0).abs() > f32::EPSILON);
+        let degrees = if replacing_or_releasing {
+            state.spyglass_baseline_fov.unwrap_or(event.degrees) * factor
         } else {
-            event.degrees
+            event.degrees * factor
         };
-        let degrees = normal_fov * state.transition.sample(Instant::now());
         if degrees.is_finite() {
             // Sunrise ignores out-of-range values. Clamp rather than falling back abruptly to
             // vanilla when a high magnification would cross the 1-degree floor.
             event.degrees = degrees.clamp(1.0, 179.0);
+        }
+
+        if replacing_or_releasing {
+            if !state.replacing_spyglass && (factor - 1.0).abs() <= f32::EPSILON {
+                state.spyglass_baseline_fov = None;
+                state.last_unscoped_fov = Some(event.degrees);
+            }
+        } else {
+            state.last_unscoped_fov = Some(incoming_degrees);
         }
     }
 }
