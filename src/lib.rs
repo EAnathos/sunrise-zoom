@@ -10,7 +10,8 @@ use std::time::{Duration, Instant};
 
 mod animation;
 
-const MAGNIFICATION: &str = "magnification";
+const SPYGLASS_MAGNIFICATION: &str = "spyglass_magnification";
+const KEY_MAGNIFICATION: &str = "key_magnification";
 const TRANSITION_SECONDS: &str = "transition_seconds";
 const MODE: &str = "mode";
 const ZOOM_KEY: &str = "zoom";
@@ -57,14 +58,25 @@ impl Hooks for SunriseZoom {
         ));
         let _ = registrar.register_setting(
             SettingSpec::range(
-                MAGNIFICATION,
-                "sunrise_zoom.settings.magnification",
+                SPYGLASS_MAGNIFICATION,
+                "sunrise_zoom.settings.spyglass_magnification",
                 2.0,
                 20.0,
                 0.25,
                 DEFAULT_MAGNIFICATION,
             )
-            .tooltip("sunrise_zoom.settings.magnification.tooltip"),
+            .tooltip("sunrise_zoom.settings.spyglass_magnification.tooltip"),
+        );
+        let _ = registrar.register_setting(
+            SettingSpec::range(
+                KEY_MAGNIFICATION,
+                "sunrise_zoom.settings.key_magnification",
+                2.0,
+                20.0,
+                0.25,
+                DEFAULT_MAGNIFICATION,
+            )
+            .tooltip("sunrise_zoom.settings.key_magnification.tooltip"),
         );
         let _ = registrar.register_setting(
             SettingSpec::range(
@@ -85,8 +97,12 @@ impl Hooks for SunriseZoom {
         let using_spyglass = matches!(event.player.using, Some((UseItem::Spyglass, _)));
         let mode = host.setting_choice(MODE).unwrap_or(MODE_SPYGLASS);
         let zoom_key_down = host.is_down("sunrise_zoom", ZOOM_KEY);
-        let magnification = host
-            .setting_f64(MAGNIFICATION)
+        let spyglass_magnification = host
+            .setting_f64(SPYGLASS_MAGNIFICATION)
+            .unwrap_or(DEFAULT_MAGNIFICATION)
+            .clamp(2.0, 20.0) as f32;
+        let key_magnification = host
+            .setting_f64(KEY_MAGNIFICATION)
             .unwrap_or(DEFAULT_MAGNIFICATION)
             .clamp(2.0, 20.0) as f32;
         let seconds = host
@@ -94,10 +110,10 @@ impl Hooks for SunriseZoom {
             .unwrap_or(DEFAULT_TRANSITION_SECONDS)
             .clamp(0.0, 0.6);
         let target_fov_factor = match (mode, using_spyglass, zoom_key_down) {
-            (MODE_SPYGLASS, true, _) => 1.0 / magnification,
+            (MODE_SPYGLASS, true, _) => 1.0 / spyglass_magnification,
             // In key mode, retain vanilla spyglass zoom and avoid stacking both zooms.
             (MODE_KEY, true, _) => 1.0,
-            (MODE_KEY, false, true) => 1.0 / magnification,
+            (MODE_KEY, false, true) => 1.0 / key_magnification,
             _ => 1.0,
         };
 
