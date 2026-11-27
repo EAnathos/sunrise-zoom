@@ -1,6 +1,11 @@
 {
-  "sunrise_zoom.settings.magnification": "Spyglass magnification",
-  "sunrise_zoom.settings.magnification.tooltip": "Effective zoom while using a spyglass.",
+  "sunrise_zoom.key.category": "Sunrise Zoom",
+  "sunrise_zoom.key.zoom": "Zoom",
+  "sunrise_zoom.settings.mode": "Zoom mode",
+  "sunrise_zoom.settings.mode.spyglass": "Replace spyglass zoom",
+  "sunrise_zoom.settings.mode.key": "Use a separate key",
+  "sunrise_zoom.settings.magnification": "Magnification",
+  "sunrise_zoom.settings.magnification.tooltip": "Effective zoom for the selected zoom mode.",
   "sunrise_zoom.settings.transition_seconds": "Transition duration",
   "sunrise_zoom.settings.transition_seconds.tooltip": "Seconds to animate into and out of spyglass zoom. Set to zero for an instant transition."
 }

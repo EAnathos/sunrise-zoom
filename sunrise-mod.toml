@@ -1,7 +1,7 @@
 id = "sunrise_zoom"
 name = "Sunrise Zoom"
 version = "0.1.0"
-description = "Replaces the vanilla spyglass magnification with configurable, animated client-side zoom."
+description = "Replaces spyglass zoom or adds an optional animated, rebindable client zoom key."
 authors = ["EAnathos"]
 license = "PolyForm-Noncommercial-1.0.0"
 side = "client"

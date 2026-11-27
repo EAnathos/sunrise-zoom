@@ -4,6 +4,7 @@ use mod_api::{
     Registrar, SettingSpec,
 };
 use mod_api::client::camera::UseItem;
+use mod_api::KeyRegistration;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -11,6 +12,10 @@ mod animation;
 
 const MAGNIFICATION: &str = "magnification";
 const TRANSITION_SECONDS: &str = "transition_seconds";
+const MODE: &str = "mode";
+const ZOOM_KEY: &str = "zoom";
+const MODE_SPYGLASS: u32 = 0;
+const MODE_KEY: u32 = 1;
 const DEFAULT_MAGNIFICATION: f64 = 4.0;
 const DEFAULT_TRANSITION_SECONDS: f64 = 0.18;
 
@@ -30,6 +35,21 @@ struct SunriseZoom;
 #[mod_api::sunrise_mod]
 impl Hooks for SunriseZoom {
     fn register(&self, registrar: &mut dyn Registrar, _context: &RegistrationContext) {
+        let _ = registrar.register_key_mapping(
+            KeyRegistration::new(ZOOM_KEY, "key.keyboard.c")
+                .label("sunrise_zoom.key.zoom")
+                .category("sunrise_zoom.key.category")
+                .context(mod_api::KeyConflictContext::InGame),
+        );
+        let _ = registrar.register_setting(SettingSpec::choice(
+            MODE,
+            "sunrise_zoom.settings.mode",
+            [
+                "sunrise_zoom.settings.mode.spyglass",
+                "sunrise_zoom.settings.mode.key",
+            ],
+            MODE_SPYGLASS as usize,
+        ));
         let _ = registrar.register_setting(
             SettingSpec::range(
                 MAGNIFICATION,
@@ -58,6 +78,8 @@ impl Hooks for SunriseZoom {
     /// every FOV calculation, so animation remains smooth above the game tick rate.
     fn compute_fov_modifier(&self, host: &dyn ClientHost, event: &mut ComputeFovModifierEvent<'_>) {
         let using_spyglass = matches!(event.player.using, Some((UseItem::Spyglass, _)));
+        let mode = host.setting_choice(MODE).unwrap_or(MODE_SPYGLASS);
+        let zoom_key_down = host.is_down("sunrise_zoom", ZOOM_KEY);
         let magnification = host
             .setting_f64(MAGNIFICATION)
             .unwrap_or(DEFAULT_MAGNIFICATION)
@@ -66,10 +88,11 @@ impl Hooks for SunriseZoom {
             .setting_f64(TRANSITION_SECONDS)
             .unwrap_or(DEFAULT_TRANSITION_SECONDS)
             .clamp(0.0, 0.6);
-        let target_ratio = if using_spyglass {
-            VANILLA_SPYGLASS_MAGNIFICATION / magnification
-        } else {
-            1.0
+        let target_ratio = match (mode, using_spyglass, zoom_key_down) {
+            (MODE_SPYGLASS, true, _) => VANILLA_SPYGLASS_MAGNIFICATION / magnification,
+            (MODE_KEY, false, true) => 1.0 / magnification,
+            // In key mode, keep the game's spyglass behavior intact and avoid stacking both zooms.
+            _ => 1.0,
         };
 
         if let Ok(mut transition) = transition().lock() {
@@ -77,8 +100,8 @@ impl Hooks for SunriseZoom {
         }
     }
 
-    /// Sunrise has already applied vanilla's spyglass zoom here. Scale it back to vanilla's
-    /// unzoomed FOV, then apply the animated ratio for the chosen effective magnification.
+    /// Apply the current render-time ratio: compensate for vanilla's spyglass zoom in spyglass
+    /// mode, or narrow the ordinary FOV in separate-key mode.
     fn compute_fov(&self, _host: &dyn ClientHost, event: &mut ComputeFovEvent) {
         let Ok(transition) = transition().lock() else {
             return;

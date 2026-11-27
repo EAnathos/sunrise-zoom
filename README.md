@@ -1,16 +1,16 @@
 # Sunrise Zoom
 
-**A smooth, configurable replacement for Sunrise's spyglass zoom.**
+**Replace spyglass zoom or use an optional animated zoom key.**
 
-Sunrise Zoom changes the view only while the player is using a vanilla spyglass. Use the spyglass as usual (right-click by default); the mod animates into its configured magnification and back out when released. It is a client-only native Rust mod, so neither single-player worlds nor multiplayer servers need a server installation.
+Sunrise Zoom offers two client-side modes: replace the vanilla spyglass zoom, or add a separate hold-to-zoom key. Choose the mode in the mod's settings. The default mode uses the spyglass as usual (right-click by default); the optional key mode defaults to `C` and can be rebound in Controls. Both modes animate into the configured magnification and back out when released. Neither single-player worlds nor multiplayer servers need a server installation.
 
 > **Status:** the spyglass-specific FOV and animation prototype is in progress. It has not yet been verified in a running game.
 
 ## Planned behavior
 
-- Keep the vanilla spyglass and its usual use action. There is no separate zoom key and no free-zoom mode.
-- Replace the vanilla spyglass magnification with a user-selected value.
-- Animate in while the spyglass is in use and animate out on release, including reversals during a transition.
+- **Replace spyglass zoom (default).** Keep the vanilla spyglass action and replace its magnification with a user-selected value.
+- **Separate key mode (optional).** Hold a rebindable key to zoom without a spyglass. While a spyglass is in use, its vanilla zoom remains in effect and the extra key zoom is suspended to avoid stacking.
+- Animate in while the selected activation is held and animate out on release, including reversals during a transition.
 - Keep the spyglass overlay and arm pose provided by the game.
 - Keep all settings local to the client. Server owners do not need to install or configure the mod.
 
@@ -22,8 +22,11 @@ The settings will be exposed on Sunrise's **Options → Mods → Sunrise Zoom �
 
 | Setting | Initial default | Planned range | Description |
 | --- | ---: | ---: | --- |
-| Spyglass magnification | 4× | 2×–20× | Effective zoom while looking through the spyglass. Vanilla is approximately 10×. |
+| Zoom mode | Replace spyglass zoom | Two modes | Choose between replacing spyglass zoom and using a separate key. |
+| Magnification | 4× | 2×–20× | Effective zoom for the selected mode. Vanilla spyglass is approximately 10×. |
 | Transition duration | 0.18 s | 0–0.6 s | Time to enter or leave zoom. Zero makes it instant. |
+
+The separate key defaults to `C` and is rebindable under **Options → Controls → Sunrise Zoom**. It is registered even when spyglass mode is selected, but has no effect until separate key mode is selected.
 
 Settings and defaults may change after in-game checks. The first prototype uses a smooth ease-in/ease-out curve; choosing separate curves and separate in/out durations can follow once the core behavior is stable.
 
@@ -31,16 +34,16 @@ Settings and defaults may change after in-game checks. The first prototype uses 
 
 Sunrise Zoom is `side = "client"`. Sunrise does not send client-only mod IDs to a server, so installing it does not require a matching server mod and does not block joining a server. A server owner cannot use this mod alone to set or enforce a player's magnification: local client settings are not an admin policy and can be changed by the player. Follow the server's rules about zoom and client modifications.
 
-The mod applies only during vanilla spyglass use, but servers may still treat any zoom adjustment as disallowed. This feature is not an anti-cheat or server-enforced restriction.
+The default mode changes FOV during vanilla spyglass use; the optional key mode changes FOV while its key is held. Servers may still treat either behavior as disallowed. These modes are not an anti-cheat or server-enforced restriction.
 
 ## Technical design
 
 ### Runtime flow
 
-1. Sunrise reports whether the local player is using a spyglass through `ComputeFovModifierEvent.player.using`.
-2. The client updates a reversible time-based transition toward the configured spyglass zoom ratio, or back to vanilla when the item is released.
-3. Sunrise's `compute_fov` callback receives the world FOV after the built-in spyglass zoom. The mod applies the transition ratio there, on rendered frames, leaving hand/HUD FOV on its existing path.
-4. Non-spyglass use leaves FOV unchanged.
+1. Sunrise reports whether the local player is using a spyglass through `ComputeFovModifierEvent.player.using`; its registered key mapping supplies the optional hold input.
+2. The client selects the activation from the chosen mode and updates a reversible time-based transition toward the configured zoom ratio.
+3. Sunrise's `compute_fov` callback applies the current transition ratio on rendered frames. In spyglass mode it compensates for the built-in spyglass zoom; in key mode it applies a normal-view ratio. Hand/HUD FOV remains on its existing path.
+4. Outside the selected activation, FOV is unchanged.
 
 The vanilla spyglass narrows the field of view to roughly one tenth. The implementation compensates for that built-in factor to produce the configured *effective* magnification. This assumption and the FOV behavior need an in-game check on the pinned Sunrise build.
 
@@ -51,12 +54,12 @@ The vanilla spyglass narrows the field of view to roughly one tenth. The impleme
 ├── .github/
 │   ├── ISSUE_TEMPLATE/       # Bug and feature forms
 │   └── workflows/            # Sunrise release workflow
-├── assets/sunrise_zoom/lang/ # Settings labels and tooltips
+├── assets/sunrise_zoom/lang/ # Settings labels, tooltips, and keybind name
 ├── docs/
 │   ├── architecture.md       # API findings and implementation decisions
 │   └── release-checklist.md  # Packaging and registry checklist
 ├── src/
-│   ├── lib.rs                # Sunrise hooks, settings registration, FOV adapter
+│   ├── lib.rs                # Sunrise hooks, settings/key registration, FOV adapter
 │   └── animation.rs          # Reversible frame-time transition and easing
 ├── CONTRIBUTING.md
 ├── LICENSE
@@ -65,7 +68,7 @@ The vanilla spyglass narrows the field of view to roughly one tenth. The impleme
 └── sunrise-mod.toml
 ```
 
-Keep Sunrise hooks at the boundary and the animation controller independent from the game API. Avoid server hooks, networking, free-zoom keybinds, or private game internals for this feature.
+Keep Sunrise hooks at the boundary and the animation controller independent from the game API. Avoid server hooks, networking, toggle mode, or private game internals for this feature.
 
 ## Build and development
 
@@ -79,20 +82,20 @@ cargo test
 
 ### In-game verification
 
-1. Start a world with Sunrise Zoom enabled and use a spyglass.
-2. Confirm zoom begins only while using the spyglass and returns on release.
-3. Confirm magnification matches the configured effective multiplier and does not compound with vanilla's zoom.
-4. Release or re-use the spyglass during an animation; the transition should reverse without a jump.
-5. Set transition duration to zero and confirm the view changes instantly.
-6. Confirm holding other items does not change FOV.
-7. Check the vanilla spyglass overlay, arm pose, hand/item FOV, and non-spyglass world FOV.
-8. Disconnect or change worlds while scoped; normal FOV must be restored.
+1. In the default mode, use a spyglass and confirm zoom changes only while it is in use.
+2. Confirm configured magnification replaces, rather than stacks with, vanilla spyglass zoom.
+3. Select separate key mode, rebind the key, and confirm it zooms while held without a spyglass.
+4. While in separate key mode, use the spyglass and confirm vanilla spyglass zoom remains unchanged and does not stack with the key zoom.
+5. Release the active control during a transition; the view should reverse without a jump.
+6. Set transition duration to zero and confirm the view changes instantly.
+7. Check the vanilla spyglass overlay, arm pose, hand/item FOV, and non-zoomed world FOV.
+8. Disconnect or change worlds while zoomed; normal FOV must be restored.
 9. Join a multiplayer server without installing the mod server-side; follow that server's client-mod rules.
 
 ## Roadmap
 
 - [x] Confirm Sunrise exposes the local spyglass-use state and post-vanilla FOV hooks.
-- [x] Implement configurable spyglass magnification and reversible animated transitions.
+- [x] Implement spyglass replacement and optional separate-key magnification with reversible transitions.
 - [ ] Verify the vanilla zoom compensation and hand/HUD behavior in game.
 - [ ] Add separate in/out durations and easing choices if the initial behavior is stable.
 - [ ] Prepare icon, registry metadata, release notes, and a signed Sunrise release.

@@ -1,13 +1,13 @@
 # Contributing to Sunrise Zoom
 
-Thanks for helping build Sunrise Zoom. The project replaces the vanilla spyglass magnification with a configurable, animated client-side view.
+Thanks for helping build Sunrise Zoom. The project can replace vanilla spyglass magnification or add an optional rebindable zoom key, with configurable client-side transitions.
 
 ## Before opening an issue
 
 - Search existing issues and pull requests for the same report or proposal.
 - Use the issue forms for bugs and feature requests.
 - For feature work beyond a small fix, describe the user problem and proposed behavior before implementation.
-- Keep the first release focused on spyglass magnification, transition animation, settings, and reliable FOV restoration. Do not add free zoom or a separate zoom key without first changing the product scope.
+- Keep the first release focused on the two documented activation modes, transition animation, settings, and reliable FOV restoration. Discuss additional zoom modes separately.
 
 For bug reports, include Sunrise build, mod version or commit, client/server context, reproduction steps, and relevant logs. Do not attach full worlds or private files.
 
@@ -57,7 +57,7 @@ Write subjects in English, use one logical change per commit, and omit the trail
 ## Architecture guidelines
 
 - Keep the transition controller independent from Sunrise hooks. It accepts current/target ratios and elapsed time, then returns the ratio to apply.
-- Keep Sunrise-specific code at the edges: spyglass-use detection, settings registration/reads, and FOV application.
+- Keep Sunrise-specific code at the edges: spyglass/key input, settings registration/reads, and FOV application.
 - Store only user preferences in Sunrise's client settings. Animation progress and detected spyglass use are transient runtime state.
 - Validate config values at load time and clamp magnification/durations to documented safe ranges.
 - Treat spyglass release/reuse, disconnects, world changes, and unload as explicit transition/reset paths.
