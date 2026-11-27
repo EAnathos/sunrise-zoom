@@ -19,6 +19,9 @@ const MODE_SPYGLASS: u32 = 0;
 const MODE_KEY: u32 = 1;
 const DEFAULT_MAGNIFICATION: f64 = 4.0;
 const DEFAULT_TRANSITION_SECONDS: f64 = 0.18;
+/// Sunrise only applies a Zoom when its FOV factor is greater than one. Cancel this tiny
+/// placeholder factor in `compute_fov`, where the animated FOV is applied separately.
+const TURN_ONLY_ZOOM_FACTOR: f32 = 1.001;
 
 #[derive(Default)]
 struct ZoomState {
@@ -138,12 +141,22 @@ impl Hooks for SunriseZoom {
     /// Apply spyglass replacement from the last ordinary rendered FOV. Sunrise eases its own
     /// vanilla spyglass modifier over several ticks, so the incoming degrees cannot safely be
     /// divided by 0.1 on the first scoped frame.
-    fn compute_fov(&self, _host: &dyn ClientHost, event: &mut ComputeFovEvent) {
+    fn compute_fov(&self, host: &dyn ClientHost, event: &mut ComputeFovEvent) {
         let Ok(mut state) = zoom_state().lock() else {
             return;
         };
         let incoming_degrees = event.degrees;
         let factor = state.transition.sample(Instant::now());
+        let mode = host.setting_choice(MODE).unwrap_or(MODE_SPYGLASS);
+        if mode == MODE_KEY && !state.using_spyglass && state.spyglass_baseline_fov.is_none() {
+            if factor < 1.0 {
+                let degrees = incoming_degrees * TURN_ONLY_ZOOM_FACTOR * factor;
+                if degrees.is_finite() {
+                    event.degrees = degrees.clamp(1.0, 179.0);
+                }
+            }
+            return;
+        }
         // Key mode leaves the native spyglass path entirely to Sunrise. Applying its key
         // transition while scoped would stack a second zoom on the vanilla scope.
         if state.using_spyglass && !state.replacing_spyglass {
@@ -203,9 +216,10 @@ impl Hooks for SunriseZoom {
         }
 
         Some(Zoom {
-            // FOV is already handled by compute_fov; this leaves the zoom hook's FOV unchanged.
-            factor: 1.0,
-            smooth: true,
+            // Sunrise ignores factor=1. Use a near-neutral factor so its turn scale is active;
+            // compute_fov cancels this small factor before applying our animated FOV.
+            factor: TURN_ONLY_ZOOM_FACTOR,
+            smooth: false,
             turn: factor,
         })
     }

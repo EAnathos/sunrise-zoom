@@ -44,7 +44,7 @@ Keep the animation controller independent from Sunrise events. Avoid private gam
 
 ## Mouse turning
 
-Sunrise's `zoom` hook accepts one turn scale for both look axes. In key mode, return a zoom with FOV factor `1` and use the current animated zoom factor as its turn scale. This slows horizontal and vertical looking in proportion to magnification, eases the slowdown in and out, and leaves the user's sensitivity setting unchanged. The hook is inactive in spyglass mode and while the spyglass is in use, so its native turning behavior remains in charge there.
+Sunrise's `zoom` hook accepts one turn scale for both look axes, but filters out zooms whose FOV factor is exactly `1`. In key mode, return a non-smooth zoom with a near-neutral `1.001` factor and the current animated zoom factor as its turn scale. `compute_fov` cancels the placeholder factor and applies the real animated FOV factor. This slows horizontal and vertical looking in proportion to magnification, eases the slowdown in and out, and leaves the user's sensitivity setting unchanged. The hook is inactive in spyglass mode and while the spyglass is in use, so its native turning behavior remains in charge there.
 
 ## Known checks before release
 
