@@ -1,11 +1,226 @@
-//! Sunrise Zoom's native client entry point.
-//!
-//! The first implementation step is to verify the pinned Sunrise client input and FOV hooks;
-//! see `docs/architecture.md` before wiring runtime behavior here.
-use mod_api::{self, Hooks};
+//! Sunrise Zoom replaces the vanilla spyglass magnification and animates the FOV transition.
+use mod_api::{
+    self, ClientHost, ComputeFovEvent, ComputeFovModifierEvent, Hooks, RegistrationContext,
+    Registrar, SettingSpec, Zoom,
+};
+use mod_api::client::camera::UseItem;
+use mod_api::KeyRegistration;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
+
+mod animation;
+
+const SPYGLASS_MAGNIFICATION: &str = "spyglass_magnification";
+const KEY_MAGNIFICATION: &str = "key_magnification";
+const TRANSITION_SECONDS: &str = "transition_seconds";
+const MODE: &str = "mode";
+const ZOOM_KEY: &str = "zoom";
+const MODE_SPYGLASS: u32 = 0;
+const MODE_KEY: u32 = 1;
+const DEFAULT_MAGNIFICATION: f64 = 4.0;
+const DEFAULT_TRANSITION_SECONDS: f64 = 0.18;
+/// Sunrise only applies a Zoom when its FOV factor is greater than one. Cancel this tiny
+/// placeholder factor in `compute_fov`, where the animated FOV is applied separately.
+const TURN_ONLY_ZOOM_FACTOR: f32 = 1.001;
+
+#[derive(Default)]
+struct ZoomState {
+    transition: animation::Transition,
+    using_spyglass: bool,
+    replacing_spyglass: bool,
+    last_unscoped_fov: Option<f32>,
+    spyglass_baseline_fov: Option<f32>,
+}
+
+static ZOOM_STATE: OnceLock<Mutex<ZoomState>> = OnceLock::new();
+
+fn zoom_state() -> &'static Mutex<ZoomState> {
+    ZOOM_STATE.get_or_init(|| Mutex::new(ZoomState::default()))
+}
 
 #[derive(Default)]
 struct SunriseZoom;
 
 #[mod_api::sunrise_mod]
-impl Hooks for SunriseZoom {}
+impl Hooks for SunriseZoom {
+    fn register(&self, registrar: &mut dyn Registrar, _context: &RegistrationContext) {
+        let _ = registrar.register_key_mapping(
+            KeyRegistration::new(ZOOM_KEY, "key.keyboard.c")
+                .label("sunrise_zoom.key.zoom")
+                .category("sunrise_zoom.key.category")
+                .context(mod_api::KeyConflictContext::InGame),
+        );
+        let _ = registrar.register_setting(SettingSpec::choice(
+            MODE,
+            "sunrise_zoom.settings.mode",
+            [
+                "sunrise_zoom.settings.mode.spyglass",
+                "sunrise_zoom.settings.mode.key",
+            ],
+            MODE_SPYGLASS as usize,
+        ));
+        let _ = registrar.register_setting(
+            SettingSpec::range(
+                SPYGLASS_MAGNIFICATION,
+                "sunrise_zoom.settings.spyglass_magnification",
+                2.0,
+                20.0,
+                0.25,
+                DEFAULT_MAGNIFICATION,
+            )
+            .tooltip("sunrise_zoom.settings.spyglass_magnification.tooltip"),
+        );
+        let _ = registrar.register_setting(
+            SettingSpec::range(
+                KEY_MAGNIFICATION,
+                "sunrise_zoom.settings.key_magnification",
+                2.0,
+                20.0,
+                0.25,
+                DEFAULT_MAGNIFICATION,
+            )
+            .tooltip("sunrise_zoom.settings.key_magnification.tooltip"),
+        );
+        let _ = registrar.register_setting(
+            SettingSpec::range(
+                TRANSITION_SECONDS,
+                "sunrise_zoom.settings.transition_seconds",
+                0.0,
+                0.6,
+                0.02,
+                DEFAULT_TRANSITION_SECONDS,
+            )
+            .tooltip("sunrise_zoom.settings.transition_seconds.tooltip"),
+        );
+    }
+
+    /// Track spyglass use once per client tick. The render-time hook samples the transition on
+    /// every FOV calculation, so animation remains smooth above the game tick rate.
+    fn compute_fov_modifier(&self, host: &dyn ClientHost, event: &mut ComputeFovModifierEvent<'_>) {
+        let using_spyglass = matches!(event.player.using, Some((UseItem::Spyglass, _)));
+        let mode = host.setting_choice(MODE).unwrap_or(MODE_SPYGLASS);
+        let zoom_key_down = host.is_down("sunrise_zoom", ZOOM_KEY);
+        let spyglass_magnification = host
+            .setting_f64(SPYGLASS_MAGNIFICATION)
+            .unwrap_or(DEFAULT_MAGNIFICATION)
+            .clamp(2.0, 20.0) as f32;
+        let key_magnification = host
+            .setting_f64(KEY_MAGNIFICATION)
+            .unwrap_or(DEFAULT_MAGNIFICATION)
+            .clamp(2.0, 20.0) as f32;
+        let seconds = host
+            .setting_f64(TRANSITION_SECONDS)
+            .unwrap_or(DEFAULT_TRANSITION_SECONDS)
+            .clamp(0.0, 0.6);
+        let target_fov_factor = match (mode, using_spyglass, zoom_key_down) {
+            (MODE_SPYGLASS, true, _) => 1.0 / spyglass_magnification,
+            // In key mode, retain vanilla spyglass zoom and avoid stacking both zooms.
+            (MODE_KEY, true, _) => 1.0,
+            (MODE_KEY, false, true) => 1.0 / key_magnification,
+            _ => 1.0,
+        };
+
+        if let Ok(mut state) = zoom_state().lock() {
+            let replacing_spyglass = mode == MODE_SPYGLASS && using_spyglass;
+            if replacing_spyglass && !state.replacing_spyglass {
+                // Sunrise's camera FOV eases toward the vanilla spyglass modifier over several
+                // ticks. Keep the ordinary rendered FOV as an anchor instead of dividing the
+                // first scoped frames by 0.1 before that easing has reached its target.
+                state.spyglass_baseline_fov = state.last_unscoped_fov;
+            }
+            state.replacing_spyglass = replacing_spyglass;
+            state.using_spyglass = using_spyglass;
+            state.transition.retarget(
+                target_fov_factor,
+                Duration::from_secs_f64(seconds),
+                Instant::now(),
+            );
+        }
+    }
+
+    /// Apply spyglass replacement from the last ordinary rendered FOV. Sunrise eases its own
+    /// vanilla spyglass modifier over several ticks, so the incoming degrees cannot safely be
+    /// divided by 0.1 on the first scoped frame.
+    fn compute_fov(&self, host: &dyn ClientHost, event: &mut ComputeFovEvent) {
+        let Ok(mut state) = zoom_state().lock() else {
+            return;
+        };
+        let incoming_degrees = event.degrees;
+        let factor = state.transition.sample(Instant::now());
+        let mode = host.setting_choice(MODE).unwrap_or(MODE_SPYGLASS);
+        if mode == MODE_KEY && !state.using_spyglass && state.spyglass_baseline_fov.is_none() {
+            if factor < 1.0 {
+                let degrees = incoming_degrees * TURN_ONLY_ZOOM_FACTOR * factor;
+                if degrees.is_finite() {
+                    event.degrees = degrees.clamp(1.0, 179.0);
+                }
+            }
+            return;
+        }
+        // Key mode leaves the native spyglass path entirely to Sunrise. Applying its key
+        // transition while scoped would stack a second zoom on the vanilla scope.
+        if state.using_spyglass && !state.replacing_spyglass {
+            return;
+        }
+        if state.replacing_spyglass && state.spyglass_baseline_fov.is_none() {
+            // This only occurs if the player starts using a spyglass before the first ordinary
+            // world FOV callback (for example, immediately after loading into a world).
+            state.spyglass_baseline_fov = Some(event.degrees);
+        }
+        let vanilla_fov_restored = state
+            .spyglass_baseline_fov
+            .is_some_and(|baseline| (incoming_degrees - baseline).abs() <= 0.5);
+        let replacing_or_releasing = state.spyglass_baseline_fov.is_some()
+            && (state.replacing_spyglass
+                || (factor - 1.0).abs() > f32::EPSILON
+                || !vanilla_fov_restored);
+        let degrees = if replacing_or_releasing {
+            state.spyglass_baseline_fov.unwrap_or(event.degrees) * factor
+        } else {
+            event.degrees * factor
+        };
+        if degrees.is_finite() {
+            // Sunrise ignores out-of-range values. Clamp rather than falling back abruptly to
+            // vanilla when a high magnification would cross the 1-degree floor.
+            event.degrees = degrees.clamp(1.0, 179.0);
+        }
+
+        if replacing_or_releasing {
+            if !state.replacing_spyglass
+                && (factor - 1.0).abs() <= f32::EPSILON
+                && vanilla_fov_restored
+            {
+                state.spyglass_baseline_fov = None;
+                state.last_unscoped_fov = Some(event.degrees);
+            }
+        } else {
+            state.last_unscoped_fov = Some(incoming_degrees);
+        }
+    }
+
+    /// Scale both camera axes with the same animated factor as the key zoom. Sunrise applies
+    /// this turn scale to player look input without changing the user's mouse sensitivity.
+    fn zoom(&self, host: &dyn ClientHost, _event: &mut mod_api::ZoomEvent) -> Option<Zoom> {
+        if host.setting_choice(MODE).unwrap_or(MODE_SPYGLASS) != MODE_KEY {
+            return None;
+        }
+        let Ok(state) = zoom_state().lock() else {
+            return None;
+        };
+        if state.using_spyglass {
+            return None;
+        }
+        let factor = state.transition.sample(Instant::now());
+        if factor >= 1.0 {
+            return None;
+        }
+
+        Some(Zoom {
+            // Sunrise ignores factor=1. Use a near-neutral factor so its turn scale is active;
+            // compute_fov cancels this small factor before applying our animated FOV.
+            factor: TURN_ONLY_ZOOM_FACTOR,
+            smooth: false,
+            turn: factor,
+        })
+    }
+}

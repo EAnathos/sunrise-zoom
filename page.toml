@@ -1,5 +1,11 @@
-# Before releasing, write a summary of at least 25 characters and a description
-# of at least 125 characters. Add at least one [[screenshots]] entry.
-summary = "A smooth, configurable client-side zoom for Sunrise."
-description = "Sunrise Zoom adds a rebindable zoom control with adjustable magnification and smooth animated transitions. The project is in development; see the repository README for planned features and current status."
+summary = "Replace spyglass zoom or add an optional animated zoom key."
+description = "Sunrise Zoom lets you choose between replacing the vanilla spyglass magnification and adding a separate, rebindable hold-to-zoom key. Both modes have configurable magnification and smooth transitions. It is client-side only and needs no server installation."
 categories = ["utility"]
+
+[[screenshots]]
+path = "page/gallery/zoom-in-game.jpg"
+caption = "Using Sunrise Zoom in a world"
+
+[[screenshots]]
+path = "page/gallery/zoom-settings.jpg"
+caption = "Adjusting zoom mode and magnification"
