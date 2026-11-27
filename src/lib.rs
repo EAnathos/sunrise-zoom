@@ -138,8 +138,13 @@ impl Hooks for SunriseZoom {
             // world FOV callback (for example, immediately after loading into a world).
             state.spyglass_baseline_fov = Some(event.degrees);
         }
+        let vanilla_fov_restored = state
+            .spyglass_baseline_fov
+            .is_some_and(|baseline| (incoming_degrees - baseline).abs() <= 0.5);
         let replacing_or_releasing = state.spyglass_baseline_fov.is_some()
-            && (state.replacing_spyglass || (factor - 1.0).abs() > f32::EPSILON);
+            && (state.replacing_spyglass
+                || (factor - 1.0).abs() > f32::EPSILON
+                || !vanilla_fov_restored);
         let degrees = if replacing_or_releasing {
             state.spyglass_baseline_fov.unwrap_or(event.degrees) * factor
         } else {
@@ -152,7 +157,10 @@ impl Hooks for SunriseZoom {
         }
 
         if replacing_or_releasing {
-            if !state.replacing_spyglass && (factor - 1.0).abs() <= f32::EPSILON {
+            if !state.replacing_spyglass
+                && (factor - 1.0).abs() <= f32::EPSILON
+                && vanilla_fov_restored
+            {
                 state.spyglass_baseline_fov = None;
                 state.last_unscoped_fov = Some(event.degrees);
             }
